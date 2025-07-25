@@ -145,3 +145,113 @@ def test_append_message_to_session_missing_fields(create_session):
     # Test with missing content
     response = client.post(f"/session/{session_id}/messages", json={"role": "user"})
     assert response.status_code == 422
+
+
+def test_get_messages_empty_session(create_session):
+    """Test getting messages from an empty session"""
+    session_data = create_session("testUser")
+    session_id = session_data["session_id"]
+
+    response = client.get(f"/session/{session_id}/messages")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_get_messages_all_default(create_session):
+    """Test getting all messages (default behavior)"""
+    session_data = create_session("testUser")
+    session_id = session_data["session_id"]
+
+    # Add some messages
+    client.post(f"/session/{session_id}/messages", json={"role": "user", "content": "Hello"})
+    client.post(f"/session/{session_id}/messages", json={"role": "assistant", "content": "Hi there"})
+    client.post(f"/session/{session_id}/messages", json={"role": "user", "content": "How are you?"})
+
+    response = client.get(f"/session/{session_id}/messages")
+    assert response.status_code == 200
+    messages = response.json()
+    assert len(messages) == 3
+    assert messages[0]["role"] == "user"
+    assert messages[0]["content"] == "Hello"
+    assert messages[1]["role"] == "assistant"
+    assert messages[1]["content"] == "Hi there"
+    assert messages[2]["role"] == "user"
+    assert messages[2]["content"] == "How are you?"
+
+
+def test_get_messages_all_explicit(create_session):
+    """Test getting all messages with explicit 'all' parameter"""
+    session_data = create_session("testUser")
+    session_id = session_data["session_id"]
+
+    # Add some messages
+    client.post(f"/session/{session_id}/messages", json={"role": "user", "content": "Hello"})
+    client.post(f"/session/{session_id}/messages", json={"role": "assistant", "content": "Hi there"})
+    client.post(f"/session/{session_id}/messages", json={"role": "user", "content": "How are you?"})
+
+    response = client.get(f"/session/{session_id}/messages?role=all")
+    assert response.status_code == 200
+    messages = response.json()
+    assert len(messages) == 3
+
+
+def test_get_messages_filter_user_only(create_session):
+    """Test getting only user messages"""
+    session_data = create_session("testUser")
+    session_id = session_data["session_id"]
+
+    # Add some messages
+    client.post(f"/session/{session_id}/messages", json={"role": "user", "content": "Hello"})
+    client.post(f"/session/{session_id}/messages", json={"role": "assistant", "content": "Hi there"})
+    client.post(f"/session/{session_id}/messages", json={"role": "user", "content": "How are you?"})
+
+    response = client.get(f"/session/{session_id}/messages?role=user")
+    assert response.status_code == 200
+    messages = response.json()
+    assert len(messages) == 2
+    assert all(msg["role"] == "user" for msg in messages)
+    assert messages[0]["content"] == "Hello"
+    assert messages[1]["content"] == "How are you?"
+
+
+def test_get_messages_filter_assistant_only(create_session):
+    """Test getting only assistant messages"""
+    session_data = create_session("testUser")
+    session_id = session_data["session_id"]
+
+    # Add some messages
+    client.post(f"/session/{session_id}/messages", json={"role": "user", "content": "Hello"})
+    client.post(f"/session/{session_id}/messages", json={"role": "assistant", "content": "Hi there"})
+    client.post(f"/session/{session_id}/messages", json={"role": "user", "content": "How are you?"})
+
+    response = client.get(f"/session/{session_id}/messages?role=assistant")
+    assert response.status_code == 200
+    messages = response.json()
+    assert len(messages) == 1
+    assert all(msg["role"] == "assistant" for msg in messages)
+    assert messages[0]["content"] == "Hi there"
+
+
+def test_get_messages_session_not_found():
+    """Test getting messages from a non-existent session"""
+    response = client.get("/session/9999/messages")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Session not found"
+
+
+@pytest.mark.parametrize("invalid_role", [
+    "admin",
+    "moderator",
+    "guest",
+    "USER",  # case sensitive
+    "ASSISTANT",  # case sensitive
+    "invalid",
+    "123"
+])
+def test_get_messages_invalid_role_parameter(create_session, invalid_role):
+    """Test getting messages with invalid role parameter"""
+    session_data = create_session("testUser")
+    session_id = session_data["session_id"]
+
+    response = client.get(f"/session/{session_id}/messages?role={invalid_role}")
+    assert response.status_code == 422  # Unprocessable Entity due to regex validation

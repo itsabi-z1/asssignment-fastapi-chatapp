@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from starlette import status
 
 from dto import SessionRequest, MessageRequest
@@ -39,3 +39,18 @@ async def append_message_to_session(session_id: int, message: MessageRequest):
 
     # Appends message to chat_store[session_id]
     chat_storage[session_id].append(Message(**message.model_dump()))
+
+
+@app.get("/session/{session_id}/messages", status_code=status.HTTP_200_OK)
+async def get_messages(session_id: int, role: str = Query(default="all", pattern="^(user|assistant|all)$")):
+    # Validates if session exists
+    if len(session_metadata_storage) < session_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+
+    messages = chat_storage[session_id]
+
+    # Filter messages based on role if not "all"
+    if role != "all":
+        messages = [message for message in messages if message.role == role]
+
+    return messages

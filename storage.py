@@ -4,4 +4,4 @@ from models import Session, Message
 session_metadata_storage: list[Session] = []
 
 # chat_storage will hold the messages for each session
-chat_storage: dict[str, list[Message]] = {}
+chat_storage: dict[int, list[Message]] = {}

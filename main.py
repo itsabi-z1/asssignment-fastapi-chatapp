@@ -1,10 +1,10 @@
 from datetime import datetime, timezone
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from starlette import status
 
-from dto import SessionRequest
-from models import Session
+from dto import SessionRequest, MessageRequest
+from models import Session, Message
 from storage import session_metadata_storage, chat_storage
 
 app = FastAPI(title="Chat Application")
@@ -25,3 +25,17 @@ async def create_session(session: SessionRequest):
     chat_storage[new_session.session_id] = []
 
     return new_session
+
+
+@app.post("/session/{session_id}/messages", status_code=status.HTTP_201_CREATED)
+async def append_message_to_session(session_id: int, message: MessageRequest):
+    # Validates if session exists
+    if len(session_metadata_storage) < session_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+
+    # Validates if role is user or assistant
+    if message.role not in ["user", "assistant"]:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role")
+
+    # Appends message to chat_store[session_id]
+    chat_storage[session_id].append(Message(**message.model_dump()))
